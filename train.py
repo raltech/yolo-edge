@@ -95,7 +95,13 @@ def train_step(image_data, batch_label_sbbox, batch_sbboxes, batch_label_mbbox, 
                                 (4, 26, 26, 3, 85)
                                 (4, 13, 13, 3, 85)
             '''
-            loss_items = compute_loss(pred, conv, *target[i], i)
+            # loss_items = compute_loss(pred, conv, *target[i], i)
+            if i == 0:
+                loss_items = compute_loss(pred, conv, batch_label_sbbox, batch_sbboxes, i)
+            elif i == 1:
+                loss_items = compute_loss(pred, conv, batch_label_mbbox, batch_mbboxes, i)
+            else:
+                loss_items = compute_loss(pred, conv, batch_label_lbbox, batch_lbboxes, i)
             # loss_items => [giou_loss, conf_loss, prob_loss]
 
             '''

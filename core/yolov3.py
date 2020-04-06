@@ -208,15 +208,39 @@ def bbox_iou(boxes1, boxes2):
 
 def bbox_giou(boxes1, boxes2):
 
-    boxes1 = tf.concat([boxes1[..., :2] - boxes1[..., 2:] * 0.5,
-                        boxes1[..., :2] + boxes1[..., 2:] * 0.5], axis=-1)
-    boxes2 = tf.concat([boxes2[..., :2] - boxes2[..., 2:] * 0.5,
-                        boxes2[..., :2] + boxes2[..., 2:] * 0.5], axis=-1)
+    # boxes1 = tf.concat([boxes1[..., :2] - boxes1[..., 2:] * 0.5,
+    #                     boxes1[..., :2] + boxes1[..., 2:] * 0.5], axis=-1)
+    boxes1 = tf.concat(
+             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) - \
+              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5),
+             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) + \
+              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5), axis=-1)
+    # boxes2 = tf.concat([boxes2[..., :2] - boxes2[..., 2:] * 0.5,
+    #                     boxes2[..., :2] + boxes2[..., 2:] * 0.5], axis=-1)
+    boxes2 = tf.concat(
+             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) - \
+              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5),
+             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) + \
+              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5), axis=-1)
 
-    boxes1 = tf.concat([tf.minimum(boxes1[..., :2], boxes1[..., 2:]),
-                        tf.maximum(boxes1[..., :2], boxes1[..., 2:])], axis=-1)
-    boxes2 = tf.concat([tf.minimum(boxes2[..., :2], boxes2[..., 2:]),
-                        tf.maximum(boxes2[..., :2], boxes2[..., 2:])], axis=-1)
+    # boxes1 = tf.concat([tf.minimum(boxes1[..., :2], boxes1[..., 2:]), # :2 => - part, 2: => + part
+                        # tf.maximum(boxes1[..., :2], boxes1[..., 2:])], axis=-1)
+    boxes1 = tf.concat(
+            (tf.concat(tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                       tf.minimum(boxes1[..., 4:6], boxes1[..., 6:8]), 
+                       tf.minimum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)),
+            (tf.concat(tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                       tf.maximum(boxes1[..., 4:6], boxes1[..., 6:8]), 
+                       tf.maximum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)), axis=-1)
+    # boxes2 = tf.concat([tf.minimum(boxes2[..., :2], boxes2[..., 2:]),
+    #                     tf.maximum(boxes2[..., :2], boxes2[..., 2:])], axis=-1)
+    boxes2 = tf.concat(
+            (tf.concat(tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                       tf.minimum(boxes2[..., 4:6], boxes2[..., 6:8]), 
+                       tf.minimum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)),
+            (tf.concat(tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                       tf.maximum(boxes2[..., 4:6], boxes2[..., 6:8]), 
+                       tf.maximum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)), axis=-1)
 
     boxes1_area = (boxes1[..., 2] - boxes1[..., 0]) * (boxes1[..., 3] - boxes1[..., 1])
     boxes2_area = (boxes2[..., 2] - boxes2[..., 0]) * (boxes2[..., 3] - boxes2[..., 1])
@@ -273,17 +297,24 @@ def compute_loss(pred, conv, label, bboxes, i=0):
     batch_size  = conv_shape[0]
     output_size = conv_shape[1]
     input_size  = STRIDES[i] * output_size
-    conv = tf.reshape(conv, (batch_size, output_size, output_size, 3, 5 + NUM_CLASS))
+    # conv = tf.reshape(conv, (batch_size, output_size, output_size, 3, 5 + NUM_CLASS))
 
-    conv_raw_conf = conv[:, :, :, :, 4:5]
-    conv_raw_prob = conv[:, :, :, :, 5:]
+    # conv_raw_conf = conv[:, :, :, :, 4:5]
+    conv_raw_conf = tf.concat((conv[:,:,:,4:5], conv[:,:,:,89:90], conv[:,:,:,174:175]), -1) 
+    # conv_raw_prob = conv[:, :, :, :, 5:]
+    conv_raw_prob = tf.concat((conv[:,:,:,5:85], conv[:,:,:,90:170], conv[:,:,:,175:255]), -1) 
 
-    pred_xywh     = pred[:, :, :, :, 0:4]
-    pred_conf     = pred[:, :, :, :, 4:5] # pred_conf = sigmoid(conv_raw_conf)
+    # pred_xywh     = pred[:, :, :, :, 0:4]
+    pred_xywh     = tf.concat((pred[:,:,:,0:4], pred[:,:,:,85:89], pred[:,:,:,170:174]), -1) 
+    # pred_conf     = pred[:, :, :, :, 4:5] # pred_conf = sigmoid(conv_raw_conf)
+    pred_conf     = tf.concat((pred[:,:,:,4:5], pred[:,:,:,89:90], pred[:,:,:,174:175]), -1) 
 
-    label_xywh    = label[:, :, :, :, 0:4]
-    respond_bbox  = label[:, :, :, :, 4:5] # respond is same as ground truth confidence (so 1 or 0 ??)
-    label_prob    = label[:, :, :, :, 5:]
+    # label_xywh    = label[:, :, :, :, 0:4]
+    label_xywh    = tf.concat((label[:,:,:,0:4], label[:,:,:,85:89], label[:,:,:,170:174]), -1)
+    # respond_bbox  = label[:, :, :, :, 4:5] # respond is same as ground truth confidence (so 1 or 0 ??)
+    respond_bbox  = tf.concat((label[:,:,:,4:5], label[:,:,:,89:90], label[:,:,:,174:175]), -1)
+    # label_prob    = label[:, :, :, :, 5:]
+    label_prob    = tf.concat((label[:,:,:,5:85], label[:,:,:,90:170], label[:,:,:,175:255]), -1)
 
     giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1)
     input_size = tf.cast(input_size, tf.float32)
