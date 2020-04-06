@@ -309,6 +309,7 @@ def compute_loss(pred, conv, label, bboxes, i=0):
             respond_bgd * tf.nn.sigmoid_cross_entropy_with_logits(labels=respond_bbox, logits=conv_raw_conf)
     )
 
+    print([respond_bbox.shape, label_prob.shape, conv_raw_prob.shape])
     prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
 
     # print(['giou_loss', giou_loss.shape]) => ['giou_loss', TensorShape([4, 52, 52, 3, 1])]
