@@ -55,6 +55,10 @@ i iterates 0, 1, 2
 '''
 for i, conv_tensor in enumerate(conv_tensors):
     pred_tensor = decode(conv_tensor, i)
+    # print('make sure...')
+    # print(conv_tensor.shape) => (None, 52, 52, 255)
+    # print(pred_tensor.shape) => (None, 52, 52, 255)
+    # Looks good!
     output_tensors.append(conv_tensor)
     output_tensors.append(pred_tensor)
 

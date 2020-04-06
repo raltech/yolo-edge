@@ -66,7 +66,7 @@ def YOLOv3(input_layer):
 
     return [conv_sbbox, conv_mbbox, conv_lbbox]
 
-def decode(conv_output, i=0):
+def decode(conv_output, i=0): # Edge Compatible
     """
     return tensor of shape [batch_size, output_size, output_size, anchor_per_scale, 5 + num_classes]
     => [batch_size, output_size, output_size, anchor_per_scale * (5 + num_classes)]
