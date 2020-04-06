@@ -207,40 +207,29 @@ def bbox_iou(boxes1, boxes2):
     return 1.0 * inter_area / union_area
 
 def bbox_giou(boxes1, boxes2):
+    # Compute giou per anchor scale (so iterate 3 times for small, med, large)
 
     # boxes1 = tf.concat([boxes1[..., :2] - boxes1[..., 2:] * 0.5,
     #                     boxes1[..., :2] + boxes1[..., 2:] * 0.5], axis=-1)
-    boxes1 = tf.concat(
-             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) - \
-              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5),
-             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) + \
-              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5), axis=-1)
     # boxes2 = tf.concat([boxes2[..., :2] - boxes2[..., 2:] * 0.5,
     #                     boxes2[..., :2] + boxes2[..., 2:] * 0.5], axis=-1)
-    boxes2 = tf.concat(
-             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) - \
-              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5),
-             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) + \
-              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5), axis=-1)
-
     # boxes1 = tf.concat([tf.minimum(boxes1[..., :2], boxes1[..., 2:]), # :2 => - part, 2: => + part
                         # tf.maximum(boxes1[..., :2], boxes1[..., 2:])], axis=-1)
-    boxes1 = tf.concat(
-            (tf.concat(tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
-                       tf.minimum(boxes1[..., 4:6], boxes1[..., 6:8]), 
-                       tf.minimum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)),
-            (tf.concat(tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4]), 
-                       tf.maximum(boxes1[..., 4:6], boxes1[..., 6:8]), 
-                       tf.maximum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)), axis=-1)
     # boxes2 = tf.concat([tf.minimum(boxes2[..., :2], boxes2[..., 2:]),
     #                     tf.maximum(boxes2[..., :2], boxes2[..., 2:])], axis=-1)
-    boxes2 = tf.concat(
-            (tf.concat(tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
-                       tf.minimum(boxes2[..., 4:6], boxes2[..., 6:8]), 
-                       tf.minimum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)),
-            (tf.concat(tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4]), 
-                       tf.maximum(boxes2[..., 4:6], boxes2[..., 6:8]), 
-                       tf.maximum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)), axis=-1)
+
+    boxes1_original = tf.identity(boxes1)
+    boxes2_original = tf.identity(boxes2)
+
+    ### Small level ###
+    boxes1 = tf.concat([boxes1_original[..., 0:2] - boxes1_original[..., 2:4] * 0.5,
+                        boxes1_original[..., 0:2] + boxes1_original[..., 2:4] * 0.5], axis=-1)
+    boxes2 = tf.concat([boxes2_original[..., 0:2] - boxes2_original[..., 2:4] * 0.5,
+                        boxes2_original[..., 0:2] + boxes2_original[..., 2:4] * 0.5], axis=-1)
+    boxes1 = tf.concat([tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                        tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4])], axis=-1)
+    boxes2 = tf.concat([tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                        tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4])], axis=-1)
 
     boxes1_area = (boxes1[..., 2] - boxes1[..., 0]) * (boxes1[..., 3] - boxes1[..., 1])
     boxes2_area = (boxes2[..., 2] - boxes2[..., 0]) * (boxes2[..., 3] - boxes2[..., 1])
@@ -257,10 +246,97 @@ def bbox_giou(boxes1, boxes2):
     enclose_right_down = tf.maximum(boxes1[..., 2:], boxes2[..., 2:])
     enclose = tf.maximum(enclose_right_down - enclose_left_up, 0.0)
     enclose_area = enclose[..., 0] * enclose[..., 1]
-    giou = iou - 1.0 * (enclose_area - union_area) / enclose_area
+    giou_small = iou - 1.0 * (enclose_area - union_area) / enclose_area 
 
-    return giou
+    ### Medium level ###
+    # print(boxes1_original.shape)
+    boxes1 = tf.concat([boxes1_original[..., 4:6] - boxes1_original[..., 6:8] * 0.5,
+                        boxes1_original[..., 4:6] + boxes1_original[..., 6:8] * 0.5], axis=-1)
+    boxes2 = tf.concat([boxes2_original[..., 4:6] - boxes2_original[..., 6:8] * 0.5,
+                        boxes2_original[..., 4:6] + boxes2_original[..., 6:8] * 0.5], axis=-1)
+    boxes1 = tf.concat([tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                        tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4])], axis=-1)
+    boxes2 = tf.concat([tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                        tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4])], axis=-1)
 
+    boxes1_area = (boxes1[..., 2] - boxes1[..., 0]) * (boxes1[..., 3] - boxes1[..., 1])
+    boxes2_area = (boxes2[..., 2] - boxes2[..., 0]) * (boxes2[..., 3] - boxes2[..., 1])
+
+    left_up = tf.maximum(boxes1[..., :2], boxes2[..., :2])
+    right_down = tf.minimum(boxes1[..., 2:], boxes2[..., 2:])
+
+    inter_section = tf.maximum(right_down - left_up, 0.0)
+    inter_area = inter_section[..., 0] * inter_section[..., 1]
+    union_area = boxes1_area + boxes2_area - inter_area
+    iou = inter_area / union_area
+
+    enclose_left_up = tf.minimum(boxes1[..., :2], boxes2[..., :2])
+    enclose_right_down = tf.maximum(boxes1[..., 2:], boxes2[..., 2:])
+    enclose = tf.maximum(enclose_right_down - enclose_left_up, 0.0)
+    enclose_area = enclose[..., 0] * enclose[..., 1]
+    giou_medium = iou - 1.0 * (enclose_area - union_area) / enclose_area
+
+    ### Large level ###
+    boxes1 = tf.concat([boxes1_original[..., 8:10] - boxes1_original[..., 10:12] * 0.5,
+                        boxes1_original[..., 8:10] + boxes1_original[..., 10:12] * 0.5], axis=-1)
+    boxes2 = tf.concat([boxes2_original[..., 8:10] - boxes2_original[..., 10:12] * 0.5,
+                        boxes2_original[..., 8:10] + boxes2_original[..., 10:12] * 0.5], axis=-1)
+    boxes1 = tf.concat([tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                        tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4])], axis=-1)
+    boxes2 = tf.concat([tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                        tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4])], axis=-1)
+
+    boxes1_area = (boxes1[..., 2] - boxes1[..., 0]) * (boxes1[..., 3] - boxes1[..., 1])
+    boxes2_area = (boxes2[..., 2] - boxes2[..., 0]) * (boxes2[..., 3] - boxes2[..., 1])
+
+    left_up = tf.maximum(boxes1[..., :2], boxes2[..., :2])
+    right_down = tf.minimum(boxes1[..., 2:], boxes2[..., 2:])
+
+    inter_section = tf.maximum(right_down - left_up, 0.0)
+    inter_area = inter_section[..., 0] * inter_section[..., 1]
+    union_area = boxes1_area + boxes2_area - inter_area
+    iou = inter_area / union_area
+
+    enclose_left_up = tf.minimum(boxes1[..., :2], boxes2[..., :2])
+    enclose_right_down = tf.maximum(boxes1[..., 2:], boxes2[..., 2:])
+    enclose = tf.maximum(enclose_right_down - enclose_left_up, 0.0)
+    enclose_area = enclose[..., 0] * enclose[..., 1]
+    giou_large = iou - 1.0 * (enclose_area - union_area) / enclose_area
+    
+    return tf.concat([giou_small[...,tf.newaxis], giou_medium[...,tf.newaxis], giou_large[...,tf.newaxis]], axis=-1)
+    # giou.shape => (4, 52, 52, 3)
+
+
+    ''' attemp 1
+    boxes1 = tf.concat(
+             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) - \
+              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5),
+             (tf.concat((boxes1[..., 0:2], boxes1[..., 4:6], boxes1[..., 8:10]), axis=-1) + \
+              tf.concat((boxes1[..., 2:4], boxes1[..., 6:8], boxes1[..., 10:12]), axis=-1) * 0.5), axis=-1)
+    
+    boxes2 = tf.concat(
+             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) - \
+              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5),
+             (tf.concat((boxes2[..., 0:2], boxes2[..., 4:6], boxes2[..., 8:10]), axis=-1) + \
+              tf.concat((boxes2[..., 2:4], boxes2[..., 6:8], boxes2[..., 10:12]), axis=-1) * 0.5), axis=-1)
+
+    
+    boxes1 = tf.concat(
+            (tf.concat(tf.minimum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                       tf.minimum(boxes1[..., 4:6], boxes1[..., 6:8]), 
+                       tf.minimum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)),
+            (tf.concat(tf.maximum(boxes1[..., 0:2], boxes1[..., 2:4]), 
+                       tf.maximum(boxes1[..., 4:6], boxes1[..., 6:8]), 
+                       tf.maximum(boxes1[..., 8:10], boxes1[..., 10:12]), axis=-1)), axis=-1)
+    
+    boxes2 = tf.concat(
+            (tf.concat(tf.minimum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                       tf.minimum(boxes2[..., 4:6], boxes2[..., 6:8]), 
+                       tf.minimum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)),
+            (tf.concat(tf.maximum(boxes2[..., 0:2], boxes2[..., 2:4]), 
+                       tf.maximum(boxes2[..., 4:6], boxes2[..., 6:8]), 
+                       tf.maximum(boxes2[..., 8:10], boxes2[..., 10:12]), axis=-1)), axis=-1)
+    '''
 
 def compute_loss(pred, conv, label, bboxes, i=0):
     '''
@@ -316,7 +392,9 @@ def compute_loss(pred, conv, label, bboxes, i=0):
     # label_prob    = label[:, :, :, :, 5:]
     label_prob    = tf.concat((label[:,:,:,5:85], label[:,:,:,90:170], label[:,:,:,175:255]), -1)
 
-    giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1)
+    giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1) # why expand...????
+    print('green')
+    print(giou.shape)
     input_size = tf.cast(input_size, tf.float32)
 
     bbox_loss_scale = 2.0 - 1.0 * label_xywh[:, :, :, :, 2:3] * label_xywh[:, :, :, :, 3:4] / (input_size ** 2)
