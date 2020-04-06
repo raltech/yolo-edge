@@ -392,26 +392,66 @@ def compute_loss(pred, conv, label, bboxes, i=0):
     # label_prob    = label[:, :, :, :, 5:]
     label_prob    = tf.concat((label[:,:,:,5:85], label[:,:,:,90:170], label[:,:,:,175:255]), -1)
 
-    giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1) # why expand...????
-    print('green')
-    print(giou.shape)
+    # giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1) # why expand...????
+    giou = bbox_giou(pred_xywh, label_xywh)
+    # print('green')
+    # print(giou.shape) => (4, 52, 52, 3)
     input_size = tf.cast(input_size, tf.float32)
 
-    bbox_loss_scale = 2.0 - 1.0 * label_xywh[:, :, :, :, 2:3] * label_xywh[:, :, :, :, 3:4] / (input_size ** 2)
+    # bbox_loss_scale = 2.0 - 1.0 * label_xywh[:, :, :, :, 2:3] * label_xywh[:, :, :, :, 3:4] / (input_size ** 2)
+    bbox_loss_scale = 2.0 - 1.0 * (tf.concat((label_xywh[:, :, :, 2:3], label_xywh[:, :, :, 87:88], label_xywh[:, :, :, 172:173]), -1)) * \
+                                  (tf.concat((label_xywh[:, :, :, 3:4], label_xywh[:, :, :, 88:89], label_xywh[:, :, :, 173:174]), -1)) / \
+                                  (input_size ** 2)
+    # print(respond_bbox.shape) => (4, 52, 52, 3)
+    # print(bbox_loss_scale.shape) => (4, 52, 52, 1)
+    # print(giou.shape) => (4, 52, 52, 3)
     giou_loss = respond_bbox * bbox_loss_scale * (1- giou)
+    # print(giou_loss.shape) => (4, 52, 52, 3)
 
     # print('Input to bbox_iou() func')
     # print(['pred_xywh[:, :, :, :, np.newaxis, :]',pred_xywh[:, :, :, :, np.newaxis, :].shape])
     # => ['pred_xywh[:, :, :, :, np.newaxis, :]', TensorShape([4, 52, 52, 3, 1, 4])]
     # print(['bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :]',bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :].shape])
     # => ['bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :]', (4, 1, 1, 1, 150, 4)]
-    iou = bbox_iou(pred_xywh[:, :, :, :, np.newaxis, :], bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :])
+
+    # print(pred_xywh.shape) => (4, 52, 52, 12)
+    # print(bboxes.shape) => (4, 150, 4)
+    # idea: make bboxes.shape into (4,150,12)
+    # for each bbox from 150, pass to bbox_iou() to calc iou
+    # then marge 150 ious altogether
+    # bboxes = tf.concat((bboxes, bboxes, bboxes), axis=-1)
+
+    pred_xywh_small = pred_xywh[..., 0:4] 
+    pred_xywh_medium = pred_xywh[..., 4:8]
+    pred_xywh_large = pred_xywh[..., 8:12] # (4, 52, 52, 4)
+    max_bbox_per_scale = bboxes.shape[1]
+    # iou_small = tf.zeros([pred_xywh_small.shape[0], pred_xywh_small.shape[1], pred_xywh_small.shape[2], max_bbox_per_scale])
+    for i in range(max_bbox_per_scale):
+        # print(pred_xywh_small.shape) => (4, 52, 52, 4)
+        # print(bboxes[:,i:i+1,tf.newaxis,:].shape) => (4, 1, 1, 4)
+        if i == 0:
+            iou_small  = bbox_iou(pred_xywh_small, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis] 
+            iou_medium = bbox_iou(pred_xywh_medium, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis]  
+            iou_large  = bbox_iou(pred_xywh_large, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis]   
+        else:
+            iou_small  = tf.concat((iou_small, bbox_iou(pred_xywh_small, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis]), -1)   
+            iou_medium  = tf.concat((iou_medium, bbox_iou(pred_xywh_medium, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis]), -1)   
+            iou_large  = tf.concat((iou_large, bbox_iou(pred_xywh_large, bboxes[:,i:i+1,tf.newaxis,:])[...,tf.newaxis]), -1)
+    # print(iou_small.shape) => (4, 52, 52, 150)
+
+    # iou = bbox_iou(pred_xywh[:, :, :, :, np.newaxis, :], bboxes[:, np.newaxis, np.newaxis, np.newaxis, :, :])
     # print(['iou', iou.shape])
     # ['iou', TensorShape([4, 52, 52, 3, 150])] i = 0
     # ['iou', TensorShape([4, 26, 26, 3, 150])] i = 1
     # ['iou', TensorShape([4, 13, 13, 3, 150])] i = 2
 
-    max_iou = tf.expand_dims(tf.reduce_max(iou, axis=-1), axis=-1) # Choose one bbox that has max iou from 150 bboxes
+    max_iou_small = tf.reduce_max(iou_small, axis=-1)   # Choose one bbox that has max iou from 150 bboxes
+    max_iou_medium = tf.reduce_max(iou_medium, axis=-1) # Choose one bbox that has max iou from 150 bboxes
+    max_iou_large = tf.reduce_max(iou_large, axis=-1)   # Choose one bbox that has max iou from 150 bboxes
+    # print(max_iou_small.shape) => (4, 52, 52)
+    max_iou = tf.concat((max_iou_small[...,tf.newaxis], max_iou_medium[...,tf.newaxis], max_iou_large[...,tf.newaxis]), -1)
+    # print(max_iou.shape) => (4, 52, 52, 3)
+
     # print(['max_out', max_iou.shape])
     # ['max_out', TensorShape([4, 52, 52, 3, 1])] i = 0 
     # ['max_out', TensorShape([4, 26, 26, 3, 1])] i = 1
@@ -426,7 +466,7 @@ def compute_loss(pred, conv, label, bboxes, i=0):
             +
             respond_bgd * tf.nn.sigmoid_cross_entropy_with_logits(labels=respond_bbox, logits=conv_raw_conf)
     )
-
+    print([respond_bbox.shape, label_prob.shape, conv_raw_prob.shape])
     prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
 
     # print(['giou_loss', giou_loss.shape]) => ['giou_loss', TensorShape([4, 52, 52, 3, 1])]
