@@ -466,22 +466,41 @@ def compute_loss(pred, conv, label, bboxes, i=0):
             +
             respond_bgd * tf.nn.sigmoid_cross_entropy_with_logits(labels=respond_bbox, logits=conv_raw_conf)
     )
-    print([respond_bbox.shape, label_prob.shape, conv_raw_prob.shape])
-    prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
+    # print([respond_bbox.shape, label_prob.shape, conv_raw_prob.shape])
+    # => original: [(4, 13, 13, 3, 1), (4, 13, 13, 3, 80), TensorShape([4, 13, 13, 3, 80])]
+    # => [TensorShape([4, 52, 52, 3]), TensorShape([4, 52, 52, 240]), TensorShape([4, 52, 52, 240])]
+    # print(respond_bbox.numpy().shape) => (4, 52, 52, 3)
+    # divide them into each anchor level so that the last dim of respond_bbox becomes 1 and 80
+    respond_bbox_small  = respond_bbox[...,0,tf.newaxis]
+    respond_bbox_medium = respond_bbox[...,1,tf.newaxis]
+    respond_bbox_large  = respond_bbox[...,2,tf.newaxis]
+    label_prob_small  = label_prob[...,0:80]
+    label_prob_medium = label_prob[...,80:160]
+    label_prob_large  = label_prob[...,160:240]
+    conv_raw_prob_small  = conv_raw_prob[...,0:80]
+    conv_raw_prob_medium = conv_raw_prob[...,80:160]
+    conv_raw_prob_large  = conv_raw_prob[...,160:240]
+    prob_loss_small = respond_bbox_small * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob_small, logits=conv_raw_prob_small)
+    prob_loss_medium = respond_bbox_medium * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob_medium, logits=conv_raw_prob_medium)
+    prob_loss_large = respond_bbox_large * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob_large, logits=conv_raw_prob_large)
+    # print(prob_loss_small.shape) => (4, 52, 52, 80)
+    # prob_loss = respond_bbox.numpy() * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
+    prob_loss = tf.concat((prob_loss_small, prob_loss_medium, prob_loss_large), -1)
+    # print(prob_loss.shape) => (4, 52, 52, 240)
 
     # print(['giou_loss', giou_loss.shape]) => ['giou_loss', TensorShape([4, 52, 52, 3, 1])]
     # print(['conf_loss', conf_loss.shape]) => ['conf_loss', TensorShape([4, 52, 52, 3, 1])]
     # print(['prob_loss', prob_loss.shape]) => ['prob_loss', TensorShape([4, 52, 52, 3, 80])]
-    giou_loss = tf.reduce_mean(tf.reduce_sum(giou_loss, axis=[1,2,3,4])) # reduce_sum reduces into (4,) tensor
-    conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1,2,3,4])) # then take mean of those 4 values
-    prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3,4])) # thus, final loss is scalar
+    giou_loss = tf.reduce_mean(tf.reduce_sum(giou_loss, axis=[1,2,3])) # reduce_sum reduces into (4,) tensor
+    conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1,2,3])) # then take mean of those 4 values
+    prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3])) # thus, final loss is scalar
     # print(['giou_loss', giou_loss]) 
     # => ['giou_loss', <tf.Tensor: id=16226, shape=(), dtype=float32, numpy=2.2939475>]
     # print(['conf_loss', conf_loss])
     # => ['conf_loss', <tf.Tensor: id=16230, shape=(), dtype=float32, numpy=1525.9078>]
     # print(['prob_loss', prob_loss])
     # => ['prob_loss', <tf.Tensor: id=16234, shape=(), dtype=float32, numpy=96.9215>]
-
+    
     return giou_loss, conf_loss, prob_loss
 
 
