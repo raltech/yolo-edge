@@ -67,7 +67,7 @@ optimizer = tf.keras.optimizers.Adam()
 if os.path.exists(logdir): shutil.rmtree(logdir)
 writer = tf.summary.create_file_writer(logdir)
 
-def train_step(image_data, target):
+def train_step(image_data, batch_label_sbbox, batch_sbboxes, batch_label_mbbox, batch_mbboxes, batch_label_lbbox, batch_lbboxes):
     with tf.GradientTape() as tape:
         pred_result = model(image_data, training=True)
         '''
@@ -152,7 +152,7 @@ def train_step(image_data, target):
 
 
 for epoch in range(cfg.TRAIN.EPOCHS):
-    for image_data, target in trainset:
+    for image_data, batch_label_sbbox, batch_sbboxes, batch_label_mbbox, batch_mbboxes, batch_label_lbbox, batch_lbboxes in trainset:
         '''
         image_data = batch_image
         target = (batch_smaller_target, batch_medium_target, batch_larger_target)
@@ -161,6 +161,6 @@ for epoch in range(cfg.TRAIN.EPOCHS):
                 batch_medium_target  = batch_label_mbbox, batch_mbboxes
                 batch_larger_target  = batch_label_lbbox, batch_lbboxes
         '''
-        train_step(image_data, target)
+        train_step(image_data, batch_label_sbbox, batch_sbboxes, batch_label_mbbox, batch_mbboxes, batch_label_lbbox, batch_lbboxes)
     model.save_weights("./yolov3")
 
